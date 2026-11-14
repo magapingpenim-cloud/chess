@@ -9,6 +9,7 @@ import chess
 
 import core
 from core import ApiError, db
+from puzzles import adjust_delta
 
 TIME_CONTROLS = {"3+0": (180, 0), "5+0": (300, 0), "10+0": (600, 0), "3+2": (180, 2)}
 QUEUE_STALE = 7.0          # сек без опроса — игрок ушёл из поиска
@@ -120,7 +121,8 @@ def _get(uid: int, gid) -> Game:
 
 
 def _elo(ra: int, rb: int, score: float) -> int:
-    return round(K_FACTOR * (score - 1 / (1 + 10 ** ((rb - ra) / 400))))
+    raw = K_FACTOR * (score - 1 / (1 + 10 ** ((rb - ra) / 400)))
+    return adjust_delta(ra, raw)   # чем выше рейтинг игрока, тем дороже поражение и скромнее победа
 
 
 async def _finish(g: Game, result: str, reason: str):

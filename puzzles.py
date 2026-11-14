@@ -142,9 +142,21 @@ def result_score(solved: bool, mistakes: int, hint_used: bool) -> float:
     return 1.0
 
 
+def level_factor(rating: int, gaining: bool) -> float:
+    """Чем выше уровень, тем меньше плюс за победу и тем больше минус за поражение.
+    600: ×1.4 за победу / ×0.6 за поражение · 1400: ×1.0 / ×1.0 · 2400: ×0.5 / ×1.5."""
+    t = (rating - 1400) / 1000          # 0 на уровне 1400
+    f = 1 - 0.5 * t if gaining else 1 + 0.5 * t
+    return min(1.5, max(0.5, f))
+
+
+def adjust_delta(rating: int, raw: float) -> int:
+    return round(raw * level_factor(rating, raw > 0))
+
+
 def elo(user: int, puzzle: int, score: float | bool, k: int = 32) -> int:
     expected = 1 / (1 + 10 ** ((puzzle - user) / 400))
-    return max(100, round(user + k * (float(score) - expected)))
+    return max(100, user + adjust_delta(user, k * (float(score) - expected)))
 
 
 def board_image_url(s: Session) -> str:
