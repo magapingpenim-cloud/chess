@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ChessUp</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --sec: var(--tg-theme-secondary-bg-color, #f1f2f6);
+    --text: var(--tg-theme-text-color, #14161a);
+    --hint: var(--tg-theme-hint-color, #8a8f98);
+    --accent: var(--tg-theme-button-color, #3b82f6);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --card: var(--tg-theme-section-bg-color, var(--bg));
+    --good: #22a559; --bad: #e5484d; --gold: #f5a524;
+    --light: #eed8b6; --dark: #b4875f;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--sec); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100vh; overscroll-behavior: none; }
+  .screen { display: none; padding: 16px 16px 32px; max-width: 520px; margin: 0 auto; }
+  .screen.active { display: block; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  h1 { font-size: 26px; margin: 4px 0 4px; letter-spacing: -.3px; }
+  h2 { font-size: 20px; margin: 0 0 12px; }
+  .muted { color: var(--hint); }
+  .card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    border: 0; border-radius: 14px; padding: 15px; font-size: 16px; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: var(--accent-text); transition: transform .08s, opacity .15s; }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: var(--card); color: var(--text); }
+  .btn.gold { background: linear-gradient(135deg, #f7b733, #f59e0b); color: #2b1a00; }
+  .btn[disabled] { opacity: .5; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  /* home */
+  .hero { text-align: center; padding: 22px 16px; position: relative; overflow: hidden; }
+  .hero .logo { font-size: 13px; font-weight: 700; letter-spacing: 1.5px; color: var(--hint); text-transform: uppercase; }
+  .hero .rating { font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1.05; margin-top: 6px; }
+  .hero .sub { color: var(--hint); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+  .stat { background: var(--sec); border-radius: 12px; padding: 10px 4px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { font-size: 12px; color: var(--hint); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    background: var(--sec); font-size: 13px; font-weight: 600; margin-top: 12px; }
+  .pill.vip { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #3a2500; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .tile { background: var(--card); border-radius: var(--radius); padding: 16px 14px; cursor: pointer; border: 0;
+    text-align: left; color: var(--text); font: inherit; position: relative; transition: transform .08s; }
+  .tile:active { transform: scale(.97); }
+  .tile .ico { font-size: 26px; }
+  .tile b { display: block; margin-top: 8px; font-size: 15px; }
+  .tile small { color: var(--hint); }
+  .tile .badge { position: absolute; top: 12px; right: 12px; font-size: 12px; }
+  .list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch { width: 46px; height: 28px; border-radius: 99px; background: var(--hint); position: relative;
+    border: 0; cursor: pointer; flex: none; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+    border-radius: 50%; background: #fff; transition: transform .2s; }
+  .switch.on { background: var(--good); }
+  .switch.on::after { transform: translateX(18px); }
+
+  /* level */
+  .level { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; border: 0;
+    background: var(--card); color: var(--text); border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+    font: inherit; cursor: pointer; }
+  .level .ico { font-size: 30px; }
+  .level b { display: block; font-size: 16px; }
+
+  /* puzzle */
+  .pz-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .chip { background: var(--card); padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .status { min-height: 46px; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-weight: 600; padding: 8px 12px; border-radius: 12px; background: var(--card); margin-bottom: 12px; }
+  .status.good { color: var(--good); } .status.bad { color: var(--bad); }
+  .board-wrap { position: relative; margin: 0 auto 14px; width: min(100%, 480px); }
+  #board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1; border-radius: 10px;
+    overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.18); user-select: none; -webkit-user-select: none;
+    touch-action: none; }
+  .sq.hover { box-shadow: inset 0 0 0 4px rgba(255,255,255,.85); }
+  .sq .pc.dragging { opacity: .25; }
+  .drag-piece { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform;
+    filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)) !important; }
+  #board.shake { animation: shake .35s; }
+  @keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+  .sq { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    min-width: 0; min-height: 0; overflow: hidden; }
+  .sq.light { background: var(--light); } .sq.dark { background: var(--dark); }
+  .sq.last::before { content: ""; position: absolute; inset: 0; background: rgba(255, 214, 10, .42); }
+  .sq.sel::before { content: ""; position: absolute; inset: 0; background: rgba(20, 130, 255, .45); }
+  .sq.hint::before { content: ""; position: absolute; inset: 0; background: rgba(34, 197, 94, .55); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .sq.check::before { content: ""; position: absolute; inset: 0;
+    background: radial-gradient(circle, rgba(255,0,0,.9) 0%, rgba(255,0,0,.35) 45%, transparent 75%); }
+  .sq.dot::after { content: ""; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,.22); }
+  .sq.cap::after { content: ""; position: absolute; inset: 4%; border-radius: 50%; border: 5px solid rgba(0,0,0,.22); }
+  .pc { position: relative; z-index: 1; font-size: calc(var(--bs, 360px) / 8 * .82); line-height: 1;
+    font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", "Apple Symbols", serif; pointer-events: none; }
+  .pc { display: grid; }
+  .pc > span { grid-area: 1 / 1; text-align: center; }
+  .pc.w .fill { color: #fff; }
+  .pc.w .line { color: #1b1b1b; }
+  .pc.w { filter: drop-shadow(0 1.5px 1.5px rgba(0,0,0,.3)); }
+  .pc.b { color: #1b1b1b; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1.5px 1.5px rgba(0,0,0,.3)); }
+  .coord { position: absolute; font-size: 10px; font-weight: 700; opacity: .75; z-index: 2; pointer-events: none; }
+  .coord.rk { top: 2px; left: 3px; } .coord.fl { bottom: 1px; right: 3px; }
+  .sq.light .coord { color: var(--dark); } .sq.dark .coord { color: var(--light); }
+
+  /* sheet */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-end; z-index: 10; }
+  .overlay.show { display: flex; animation: fade .2s; }
+  .sheet { background: var(--bg); width: 100%; max-width: 520px; margin: 0 auto; border-radius: 22px 22px 0 0;
+    padding: 24px 16px calc(20px + env(safe-area-inset-bottom)); text-align: center; animation: up .25s ease; }
+  @keyframes up { from { transform: translateY(40px); } to { transform: none; } }
+  .sheet .big { font-size: 54px; }
+  .delta { font-size: 34px; font-weight: 800; }
+  .delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0; }
+  .tag { background: var(--sec); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+
+  /* top / vip */
+  .top-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--sec); }
+  .top-row:last-child { border: 0; }
+  .top-row .n { width: 28px; text-align: center; font-weight: 700; }
+  .top-row .nm { flex: 1; }
+  .feat { display: flex; gap: 12px; align-items: flex-start; margin: 10px 0; }
+  .feat .ico { font-size: 22px; }
+  .plan { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 2px solid transparent;
+    background: var(--card); color: var(--text); border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+    font: inherit; cursor: pointer; text-align: left; }
+  .plan.best { border-color: var(--gold); }
+  .plan .price { font-size: 20px; font-weight: 800; white-space: nowrap; }
+  .banner { background: linear-gradient(135deg, #fff4d6, #ffe2a8); color: #4a3200; border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 12px; font-weight: 600; }
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: rgba(20,20,22,.92); color: #fff; padding: 11px 16px; border-radius: 12px; font-size: 14px;
+    transition: all .25s; z-index: 20; pointer-events: none; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .center { text-align: center; }
+  .loader { text-align: center; padding: 80px 0; color: var(--hint); font-size: 40px; animation: pulse 1s infinite; }
+</style>
+</head>
+<body>
+
+<div id="s-loading" class="screen active"><div class="loader">♞</div></div>
+
+<div id="s-error" class="screen">
+  <div class="card center" style="margin-top:40px">
+    <div style="font-size:48px">♟</div>
+    <h2>Откройте ChessUp в Telegram</h2>
+    <p class="muted" id="err-text">Приложение работает внутри Telegram.</p>
+  </div>
+</div>
+
+<!-- Выбор уровня -->
+<div id="s-level" class="screen">
+  <div class="center" style="margin:18px 0 22px">
+    <div style="font-size:52px">♞</div>
+    <h1>ChessUp</h1>
+    <div class="muted">Шахматная качалка для мозга. 5 минут в день — и рейтинг растёт.</div>
+  </div>
+  <h2>Какой у вас уровень?</h2>
+  <div id="levels"></div>
+</div>
+
+<!-- Главная -->
+<div id="s-home" class="screen">
+  <div class="card hero">
+    <div class="logo">♞ ChessUp</div>
+    <div class="rating" id="h-rating">—</div>
+    <div class="sub">ваш рейтинг <span id="h-rank"></span></div>
+    <div class="stats">
+      <div class="stat"><b id="h-streak">0</b><span>🔥 дней подряд</span></div>
+      <div class="stat"><b id="h-solved">0</b><span>решено</span></div>
+      <div class="stat"><b id="h-acc">0%</b><span>точность</span></div>
+    </div>
+    <div id="h-status" class="pill"></div>
+  </div>
+  <button class="btn" id="b-play">🧩 Решать задачи</button>
+  <div class="grid">
+    <button class="tile" id="t-daily"><span class="badge" id="daily-badge"></span><div class="ico">📅</div><b>Задача дня</b><small>одна для всех</small></button>
+    <button class="tile" id="t-themes"><span class="badge" id="themes-badge"></span><div class="ico">🎯</div><b>Темы</b><small>вилки, связки, маты</small></button>
+    <button class="tile" id="t-top"><div class="ico">🏆</div><b>Рейтинг</b><small>лучшие игроки</small></button>
+    <button class="tile" id="t-vip"><div class="ico">👑</div><b>VIP</b><small id="vip-small">безлимит и подсказки</small></button>
+  </div>
+  <div class="card list-item">
+    <div><b>Задача дня по утрам</b><div class="muted" style="font-size:13px">Напомним в Telegram</div></div>
+    <button class="switch" id="sw-daily"></button>
+  </div>
+  <div class="card list-item" id="c-invite" style="cursor:pointer">
+    <div><b>🎁 Пригласить друга</b><div class="muted" style="font-size:13px" id="invite-text"></div></div>
+    <div style="font-size:22px">›</div>
+  </div>
+</div>
+
+<!-- Задача -->
+<div id="s-puzzle" class="screen">
+  <div class="pz-head">
+    <b id="pz-title">Задача</b>
+    <span class="chip">⚡ <span id="pz-rating"></span></span>
+  </div>
+  <div class="status" id="pz-status"></div>
+  <div class="board-wrap"><div id="board"></div></div>
+  <div class="row">
+    <button class="btn ghost" id="b-hint">💡 Подсказка</button>
+    <button class="btn ghost" id="b-giveup">📖 Решение</button>
+  </div>
+</div>
+
+<!-- Темы -->
+<div id="s-themes" class="screen">
+  <h2>🎯 Тренировка по темам</h2>
+  <div class="grid" id="themes"></div>
+</div>
+
+<!-- Топ -->
+<div id="s-top" class="screen">
+  <h2>🏆 Лучшие игроки</h2>
+  <div class="card" id="top-list"></div>
+  <p class="muted center" style="font-size:13px">В рейтинг попадают игроки, решившие 10+ задач.</p>
+</div>
+
+<!-- VIP -->
+<div id="s-vip" class="screen">
+  <div id="vip-banner" class="banner" style="display:none"></div>
+  <div class="card center">
+    <div style="font-size:44px">👑</div>
+    <h2 style="margin:6px 0 2px">ChessUp VIP</h2>
+    <div class="muted" id="vip-status">Тренируйтесь без ограничений</div>
+  </div>
+  <div class="card">
+    <div class="feat"><div class="ico">♾️</div><div><b>Безлимит задач</b><div class="muted" id="vip-free-note"></div></div></div>
+    <div class="feat"><div class="ico">💡</div><div><b>Подсказки</b><div class="muted">Покажем, какой фигурой ходить</div></div></div>
+    <div class="feat"><div class="ico">🎯</div><div><b>Тренировка по темам</b><div class="muted">Вилки, связки, маты в 2–3 хода, эндшпиль</div></div></div>
+  </div>
+  <div id="plans"></div>
+  <button class="btn ghost" id="b-cancel-sub" style="display:none">Отменить автопродление</button>
+  <p class="muted center" style="font-size:12px">Оплата Telegram Stars ⭐. Месячная подписка продлевается автоматически, отменить можно в любой момент.</p>
+</div>
+
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+const INIT = tg ? tg.initData : "";
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("secondary_bg_color"); tg.setBackgroundColor("secondary_bg_color"); } catch (e) {} }
+
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+const OUTLINE = { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" };
+const FILES = "abcdefgh";
+let ME = null, PLANS = [], LEVELS = {}, THEMES = {};
+let P = null, sel = null, hintSq = null, busy = false, lastMode = "normal", lastTheme = null, screen = "";
+
+function haptic(kind) {
+  try {
+    if (kind === "ok") tg.HapticFeedback.notificationOccurred("success");
+    else if (kind === "err") tg.HapticFeedback.notificationOccurred("error");
+    else tg.HapticFeedback.selectionChanged();
+  } catch (e) {}
+}
+function toast(text) {
+  const t = $("#toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "X-Init-Data": INIT },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(data.message || (r.status === 401 ? "Откройте приложение в Telegram" : "Ошибка"));
+    e.code = data.error || r.status; throw e;
+  }
+  return data;
+}
+function show(id) {
+  screen = id;
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("active", s.id === id));
+  if (tg) (id === "s-home" || id === "s-level") ? tg.BackButton.hide() : tg.BackButton.show();
+  window.scrollTo(0, 0);
+  if (id === "s-puzzle") sizeBoard();
+}
+function closeSheet() { $("#overlay").classList.remove("show"); }
+$("#overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeSheet(); });
+
+/* ---------- данные ---------- */
+async function loadMe() {
+  const d = await api("/api/me");
+  ME = d.me; PLANS = d.plans; LEVELS = d.levels; THEMES = d.themes;
+}
+function fmtDate(ts) { return new Date(ts * 1000).toLocaleDateString("ru-RU"); }
+
+/* ---------- уровень ---------- */
+function renderLevels() {
+  const icons = { 600: "♟", 1000: "♞", 1400: "♜", 1800: "♛" };
+  const box = $("#levels"); box.innerHTML = "";
+  Object.entries(LEVELS).forEach(([rating, name]) => {
+    const b = document.createElement("button"); b.className = "level";
+    b.innerHTML = `<div class="ico">${icons[rating] || "♟"}</div><div><b>${name}</b><span class="muted">стартовый рейтинг ${rating}</span></div>`;
+    b.onclick = async () => {
+      haptic();
+      try { const d = await api("/api/level", { rating: +rating }); ME = d.me; startPuzzle("normal"); }
+      catch (e) { toast(e.message); }
+    };
+    box.appendChild(b);
+  });
+}
+
+/* ---------- главная ---------- */
+function renderHome() {
+  $("#h-rating").textContent = ME.rating;
+  $("#h-rank").textContent = ME.rank ? `· место #${ME.rank}` : "";
+  $("#h-streak").textContent = ME.streak;
+  $("#h-solved").textContent = ME.solved;
+  $("#h-acc").textContent = ME.accuracy + "%";
+  const st = $("#h-status");
+  if (ME.vip) { st.className = "pill vip"; st.textContent = `👑 VIP до ${fmtDate(ME.vip_until)}`; }
+  else { st.className = "pill"; st.textContent = `🧩 Бесплатных задач сегодня: ${ME.free_left}/${ME.free_daily}`; }
+  $("#b-play").textContent = ME.has_active ? "▶️ Продолжить задачу" : "🧩 Решать задачи";
+  $("#daily-badge").textContent = ME.daily_done ? "✅" : "🔴";
+  $("#themes-badge").textContent = ME.vip ? "" : "👑";
+  $("#vip-small").textContent = ME.vip ? "активен" : "безлимит и подсказки";
+  $("#sw-daily").classList.toggle("on", ME.daily_sub);
+  $("#invite-text").textContent = `+${ME.ref_bonus_days} дней VIP, когда друг оформит VIP`;
+}
+async function goHome() {
+  closeSheet(); P = null;
+  try { await loadMe(); } catch (e) {}
+  renderHome(); show("s-home");
+}
+
+/* ---------- задача ---------- */
+function parseFen(fen) {
+  const pos = {};
+  fen.split(" ")[0].split("/").forEach((row, i) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) f += +ch;
+      else { pos[FILES[f] + (8 - i)] = ch; f++; }
+    }
+  });
+  return pos;
+}
+function sizeBoard() {
+  const b = $("#board");
+  if (b.clientWidth) b.style.setProperty("--bs", b.clientWidth + "px");
+}
+window.addEventListener("resize", sizeBoard);
+
+function renderBoard(fen, last, check) {
+  const pos = typeof fen === "string" ? parseFen(fen) : fen, el = $("#board"), flip = P && P.orientation === "b";
+  el.innerHTML = "";
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+    const fi = flip ? 7 - f : f, rank = flip ? r + 1 : 8 - r, sq = FILES[fi] + rank;
+    const d = document.createElement("div");
+    d.className = "sq " + ((fi + rank) % 2 === 1 ? "dark" : "light");
+    d.dataset.sq = sq;
+    if (last && (last.slice(0, 2) === sq || last.slice(2, 4) === sq)) d.classList.add("last");
+    if (check === sq) d.classList.add("check");
+    if (sel === sq) d.classList.add("sel");
+    if (hintSq === sq) d.classList.add("hint");
+    const pc = pos[sq];
+    if (pc) {
+      const s = document.createElement("span"), white = pc === pc.toUpperCase(), t = pc.toLowerCase();
+      s.className = "pc " + (white ? "w" : "b");
+      // белая фигура = белая заливка (сплошной глиф) + чёрный контур (контурный глиф) поверх
+      s.innerHTML = white
+        ? `<span class="fill">${GLYPH[t]}︎</span><span class="line">${OUTLINE[t]}︎</span>`
+        : `<span>${GLYPH[t]}︎</span>`;
+      d.appendChild(s);
+    }
+    if (sel && P && P.legal.includes(sel + sq)) d.classList.add(pc ? "cap" : "dot");
+    if (f === 0) { const c = document.createElement("span"); c.className = "coord rk"; c.textContent = rank; d.appendChild(c); }
+    if (r === 7) { const c = document.createElement("span"); c.className = "coord fl"; c.textContent = FILES[fi]; d.appendChild(c); }
+    el.appendChild(d);
+  }
+  sizeBoard();
+}
+function draw() { renderBoard(P.fen, P.last_move, P.check); }
+function setStatus(text, cls = "") { const s = $("#pz-status"); s.textContent = text; s.className = "status " + cls; }
+function turnText() { return P.turn === "w" ? "белых" : "чёрных"; }
+
+function onSquare(sq, pos) {
+  if (busy || !P || P.done) return;
+  const pc = pos[sq];
+  const mine = pc && ((pc === pc.toUpperCase()) === (P.turn === "w"));
+  if (sel && P.legal.includes(sel + sq)) { const from = sel; sel = null; sendMove(from + sq); return; }
+  if (mine) { sel = sel === sq ? null : sq; haptic(); } else sel = null;
+  draw();
+}
+
+/* ---------- перетаскивание (палец или мышь); короткое касание = выбор/ход как раньше ---------- */
+let drag = null;
+const isMine = (pc) => pc && ((pc === pc.toUpperCase()) === (P.turn === "w"));
+const sqAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest("#board .sq"); };
+
+function markTargets(from) {
+  document.querySelectorAll("#board .sq").forEach((el) => {
+    el.classList.remove("dot", "cap", "sel");
+    if (el.dataset.sq === from) el.classList.add("sel");
+    if (P.legal.includes(from + el.dataset.sq)) el.classList.add(el.querySelector(".pc") ? "cap" : "dot");
+  });
+}
+function endDrag() {
+  if (!drag) return;
+  if (drag.ghost) drag.ghost.remove();
+  if (drag.hover) drag.hover.classList.remove("hover");
+  drag = null;
+}
+const boardEl = $("#board");
+boardEl.addEventListener("pointerdown", (e) => {
+  if (busy || !P || P.done || e.button > 0) return;
+  const el = e.target.closest(".sq"); if (!el) return;
+  const sq = el.dataset.sq, pos = parseFen(P.fen);
+  drag = { from: sq, x: e.clientX, y: e.clientY, mine: isMine(pos[sq]), pieceEl: el.querySelector(".pc"), ghost: null, hover: null };
+  if (drag.mine) boardEl.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+boardEl.addEventListener("pointermove", (e) => {
+  if (!drag || !drag.mine) return;
+  if (!drag.ghost) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;  // ещё не перетаскивание
+    const g = drag.pieceEl.cloneNode(true);
+    const size = parseFloat(getComputedStyle(drag.pieceEl).fontSize) * 1.25;
+    g.classList.add("drag-piece"); g.style.fontSize = size + "px";
+    document.body.appendChild(g);
+    drag.ghost = g; drag.half = size / 2;
+    drag.pieceEl.classList.add("dragging");
+    sel = drag.from; markTargets(drag.from); haptic();
+  }
+  drag.ghost.style.transform = `translate(${e.clientX - drag.half}px, ${e.clientY - drag.half * 1.15}px)`;
+  const over = sqAt(e.clientX, e.clientY);
+  if (over !== drag.hover) {
+    if (drag.hover) drag.hover.classList.remove("hover");
+    drag.hover = over && P.legal.includes(drag.from + over.dataset.sq) ? over : null;
+    if (drag.hover) drag.hover.classList.add("hover");
+  }
+});
+boardEl.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  const d = drag;
+  if (d.ghost) {
+    const over = sqAt(e.clientX, e.clientY), to = over && over.dataset.sq;
+    endDrag(); sel = null;
+    if (to && P.legal.includes(d.from + to)) sendMove(d.from + to);
+    else draw();
+    return;
+  }
+  endDrag();
+  onSquare(d.from, parseFen(P.fen));  // обычное касание
+});
+boardEl.addEventListener("pointercancel", () => { endDrag(); sel = null; if (P) draw(); });
+
+function openPuzzle(p) {
+  P = p; sel = null; hintSq = null;
+  $("#pz-title").textContent = (p.daily ? "📅 " : "🧩 ") + p.title;
+  $("#pz-rating").textContent = p.rating;
+  setStatus(`Ход ${turnText()} — найдите лучший ход`);
+  show("s-puzzle"); draw();
+}
+async function startPuzzle(mode = "normal", theme = null) {
+  closeSheet(); lastMode = mode; lastTheme = theme;
+  try { openPuzzle(await api("/api/puzzle", { mode, theme })); }
+  catch (e) {
+    if (e.code === "limit" || e.code === "vip_required") openVip(e.message);
+    else if (e.code === "needs_level") { renderLevels(); show("s-level"); }
+    else toast(e.message);
+  }
+}
+async function playOrResume() {
+  haptic();
+  if (ME.has_active) {
+    try { const d = await api("/api/current"); if (d.puzzle) return openPuzzle(d.puzzle); } catch (e) {}
+  }
+  startPuzzle("normal");
+}
+
+async function sendMove(uci) {
+  busy = true; hintSq = null;
+  // сразу показываем ход (фигура «встаёт» на клетку), сервер затем подтвердит или откатит
+  const pos = parseFen(P.fen), from = uci.slice(0, 2), to = uci.slice(2, 4), pc = pos[from];
+  delete pos[from];
+  pos[to] = pc && pc.toLowerCase() === "p" && (to[1] === "8" || to[1] === "1") ? (pc === "P" ? "Q" : "q") : pc;
+  renderBoard(pos, uci, null);
+  try {
+    const r = await api("/api/move", { uci });
+    if (r.result === "illegal") { Object.assign(P, r); draw(); toast("Так ходить нельзя"); }
+    else if (r.result === "wrong") {
+      haptic("err"); Object.assign(P, r); draw();
+      const b = $("#board"); b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake");
+      setStatus("❌ Не лучший ход. Попробуйте ещё" + (r.mistakes >= 2 ? " или возьмите подсказку 💡" : ""), "bad");
+    } else {
+      haptic("ok");
+      renderBoard(r.mid_fen, r.my_move, null);
+      if (r.result === "solved") {
+        P.done = true; setStatus(`✅ ${r.my_san} — верно!`, "good");
+        await sleep(650); showResult(r.finish, null);
+      } else {
+        setStatus(`✅ ${r.my_san} — верно! Соперник отвечает…`, "good");
+        await sleep(550);
+        Object.assign(P, r); draw();
+        setStatus(`Соперник: ${r.reply_san}. Ваш ход`, "good");
+      }
+    }
+  } catch (e) { toast(e.message); if (P && !P.done) draw(); }
+  finally { busy = false; }
+}
+
+async function useHint() {
+  if (!P || P.done) return;
+  try { const r = await api("/api/hint"); hintSq = r.square; draw(); setStatus("💡 " + r.text); haptic(); }
+  catch (e) { e.code === "vip_required" ? openVip("💡 Подсказки доступны в VIP") : toast(e.message); }
+}
+async function giveUp() {
+  if (!P || P.done || busy) return;
+  const go = async () => {
+    try { const r = await api("/api/giveup"); P.done = true; hintSq = r.first_move.slice(0, 2); draw(); showResult(r.finish, r.solution); }
+    catch (e) { toast(e.message); }
+  };
+  if (tg && tg.showConfirm) tg.showConfirm("Показать решение? Задача будет засчитана как нерешённая.", (ok) => ok && go());
+  else if (confirm("Показать решение?")) go();
+}
+
+function showResult(f, solution) {
+  const up = f.delta >= 0;
+  const icon = f.solved_clean ? "🎉" : solution ? "📖" : "☑️";
+  const title = f.solved_clean ? "Решено!" : solution ? "Решение" : "Решено с подсказкой или ошибкой";
+  const free = f.free_left === null ? "" :
+    `<p class="muted" style="margin:6px 0 0">Бесплатных задач сегодня: ${f.free_left}</p>`;
+  $("#sheet").innerHTML = `
+    <div class="big">${icon}</div>
+    <h2 style="margin:4px 0">${title}</h2>
+    ${solution ? `<p style="font-size:18px;margin:6px 0"><b>${solution}</b></p>` : ""}
+    <div class="delta ${up ? "up" : "down"}">${up ? "+" : ""}${f.delta}</div>
+    <div class="muted">рейтинг ${f.rating}${f.solved_clean && f.streak > 1 ? ` · 🔥 серия ${f.streak} дн.` : ""}</div>
+    ${f.themes.length ? `<div class="tags">${f.themes.map((t) => `<span class="tag">${t}</span>`).join("")}</div>` : ""}
+    ${free}
+    <div style="height:14px"></div>
+    <button class="btn" id="r-next">➡️ Следующая задача</button>
+    <div style="height:8px"></div>
+    <button class="btn ghost" id="r-home">На главную</button>`;
+  $("#overlay").classList.add("show");
+  $("#r-next").onclick = () => startPuzzle(lastMode === "daily" ? "normal" : lastMode, lastTheme);
+  $("#r-home").onclick = goHome;
+  if (f.solved_clean) haptic("ok");
+}
+
+/* ---------- темы, топ ---------- */
+function openThemes() {
+  if (!ME.vip) return openVip("🎯 Тренировка по темам доступна в VIP");
+  const box = $("#themes"); box.innerHTML = "";
+  Object.entries(THEMES).forEach(([key, name]) => {
+    const b = document.createElement("button"); b.className = "tile";
+    b.innerHTML = `<div class="ico">🎯</div><b>${name}</b>`;
+    b.onclick = () => startPuzzle("theme", key);
+    box.appendChild(b);
+  });
+  show("s-themes");
+}
+async function openTop() {
+  show("s-top");
+  const box = $("#top-list"); box.innerHTML = '<div class="muted center">Загрузка…</div>';
+  try {
+    const { top } = await api("/api/top");
+    const medals = ["🥇", "🥈", "🥉"];
+    box.innerHTML = top.length ? top.map((r, i) => `
+      <div class="top-row"><div class="n">${medals[i] || i + 1}</div>
+      <div class="nm">${r.name.replace(/</g, "&lt;")}<div class="muted" style="font-size:12px">решено ${r.solved}</div></div>
+      <b>${r.rating}</b></div>`).join("") : '<div class="muted center">Пока пусто — станьте первым!</div>';
+  } catch (e) { box.innerHTML = `<div class="muted center">${e.message}</div>`; }
+}
+
+/* ---------- VIP ---------- */
+function openVip(reason) {
+  closeSheet();
+  const ban = $("#vip-banner");
+  ban.style.display = reason ? "block" : "none"; ban.textContent = reason || "";
+  $("#vip-status").textContent = ME.vip ? `Активен до ${fmtDate(ME.vip_until)}${ME.subscription ? " · автопродление" : ""}` : "Тренируйтесь без ограничений";
+  $("#vip-free-note").textContent = `Бесплатно — ${ME.free_daily} в день`;
+  const box = $("#plans"); box.innerHTML = "";
+  PLANS.forEach((p) => {
+    const b = document.createElement("button"); b.className = "plan" + (p.subscription ? " best" : "");
+    const perMonth = p.subscription ? "" : ` · ${Math.round(p.stars / 12)} ⭐/мес`;
+    b.innerHTML = `<div><b>${p.subscription ? "Месяц" : "Год"}</b><div class="muted" style="font-size:13px">${p.subscription ? "автопродление, отмена в любой момент" : "разовый платёж" + perMonth}</div></div>
+      <div class="price">${p.stars} ⭐</div>`;
+    b.onclick = () => buy(p.key);
+    box.appendChild(b);
+  });
+  $("#b-cancel-sub").style.display = ME.subscription ? "flex" : "none";
+  show("s-vip");
+}
+async function buy(plan) {
+  haptic();
+  try {
+    const { link } = await api("/api/buy", { plan });
+    if (tg && tg.openInvoice) {
+      tg.openInvoice(link, async (status) => {
+        if (status === "paid") {
+          haptic("ok"); toast("🎉 Оплата прошла! Активируем VIP…");
+          for (const wait of [1200, 2500, 5000]) {
+            await sleep(wait); await loadMe();
+            if (ME.vip) break;
+          }
+          openVip(ME.vip ? "👑 VIP активирован. Удачной тренировки!" : "Оплата получена, VIP появится через минуту");
+        } else if (status === "failed") toast("Оплата не прошла");
+      });
+    } else window.open(link, "_blank");
+  } catch (e) { toast(e.message); }
+}
+async function cancelSub() {
+  const go = async () => {
+    try { const r = await api("/api/cancel_sub", {}); toast(r.message); await loadMe(); openVip(); }
+    catch (e) { toast(e.message); }
+  };
+  if (tg && tg.showConfirm) tg.showConfirm("Отменить автопродление? VIP останется до конца оплаченного периода.", (ok) => ok && go());
+  else if (confirm("Отменить автопродление?")) go();
+}
+
+/* ---------- кнопки ---------- */
+$("#b-play").onclick = playOrResume;
+$("#t-daily").onclick = () => { haptic(); ME.daily_done ? toast("✅ Задача дня решена. Завтра будет новая!") : startPuzzle("daily"); };
+$("#t-themes").onclick = () => { haptic(); openThemes(); };
+$("#t-top").onclick = () => { haptic(); openTop(); };
+$("#t-vip").onclick = () => { haptic(); openVip(); };
+$("#b-hint").onclick = useHint;
+$("#b-giveup").onclick = giveUp;
+$("#b-cancel-sub").onclick = cancelSub;
+$("#sw-daily").onclick = async () => {
+  haptic();
+  try { const r = await api("/api/daily_toggle", {}); ME.daily_sub = r.daily_sub; renderHome(); toast(r.daily_sub ? "Будем присылать задачу дня ☀️" : "Напоминания выключены"); }
+  catch (e) { toast(e.message); }
+};
+$("#c-invite").onclick = () => {
+  const url = `https://t.me/share/url?url=${encodeURIComponent(ME.ref_link)}&text=${encodeURIComponent("Решай шахматные задачи в ChessUp ♟ Сможешь обогнать мой рейтинг?")}`;
+  tg && tg.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
+};
+if (tg) tg.BackButton.onClick(() => { screen === "s-themes" || screen === "s-top" || screen === "s-vip" || screen === "s-puzzle" ? goHome() : null; });
+
+/* ---------- старт ---------- */
+(async function init() {
+  try {
+    await loadMe();
+    if (ME.needs_level) { renderLevels(); show("s-level"); }
+    else { renderHome(); show("s-home"); }
+  } catch (e) {
+    $("#err-text").textContent = e.message;
+    show("s-error");
+  }
+})();
+</script>
+</body>
+</html>
