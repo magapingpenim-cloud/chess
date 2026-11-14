@@ -130,9 +130,21 @@ def solution_text(s: Session) -> str:
     return " ".join(out)
 
 
-def elo(user: int, puzzle: int, solved: bool, k: int = 32) -> int:
+def result_score(solved: bool, mistakes: int, hint_used: bool) -> float:
+    """Насколько хорошо решена задача (0..1) — от этого зависит изменение рейтинга.
+    Одна ошибка штрафуется мягко, сдача — полностью."""
+    if not solved:
+        return 0.0
+    if hint_used or mistakes >= 2:
+        return 0.25
+    if mistakes == 1:
+        return 0.45
+    return 1.0
+
+
+def elo(user: int, puzzle: int, score: float | bool, k: int = 32) -> int:
     expected = 1 / (1 + 10 ** ((puzzle - user) / 400))
-    return max(100, round(user + k * ((1 if solved else 0) - expected)))
+    return max(100, round(user + k * (float(score) - expected)))
 
 
 def board_image_url(s: Session) -> str:

@@ -535,8 +535,12 @@ async function giveUp() {
 
 function showResult(f, solution) {
   const up = f.delta >= 0;
-  const icon = f.solved_clean ? "🎉" : solution ? "📖" : "☑️";
-  const title = f.solved_clean ? "Решено!" : solution ? "Решение" : "Решено с подсказкой или ошибкой";
+  const icon = f.solved_clean ? "🎉" : solution ? "📖" : "👍";
+  const title = f.solved_clean ? "Решено!"
+    : solution ? "Решение"
+    : f.hint_used ? "Решено с подсказкой"
+    : f.mistakes === 1 ? "Решено с одной ошибкой — почти идеально!"
+    : `Решено с ошибками (${f.mistakes})`;
   const free = f.free_left === null ? "" :
     `<p class="muted" style="margin:6px 0 0">Бесплатных задач сегодня: ${f.free_left}</p>`;
   $("#sheet").innerHTML = `

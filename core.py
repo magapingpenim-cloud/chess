@@ -193,15 +193,22 @@ async def new_puzzle(uid: int, mode: str = "normal", theme: str | None = None) -
     return _puzzle_payload(row, s, title)
 
 
-async def _finish(uid: int, s: P.Session, solved_clean: bool) -> dict:
+async def _finish(uid: int, s: P.Session, solved: bool) -> dict:
+    """solved=True — дошёл до конца сам (возможно, с ошибками); False — сдался."""
     sessions.pop(uid, None)
     u = await db.get_user(uid)
-    new_rating = P.elo(u["rating"], s.rating, solved_clean)
-    await db.record_result(uid, s.puzzle_id, solved_clean, new_rating, daily=s.daily)
+    score = P.result_score(solved, s.mistakes, s.hint_used)
+    solved_clean = solved and s.mistakes == 0 and not s.hint_used
+    new_rating = P.elo(u["rating"], s.rating, score)
+    # решённой (и для серии дней) считается задача, доведённая до конца без сдачи
+    await db.record_result(uid, s.puzzle_id, solved, new_rating, daily=s.daily)
     u2 = await db.get_user(uid)
     row = await db.get_puzzle(s.puzzle_id)
     return {
         "solved_clean": solved_clean,
+        "solved": solved,
+        "mistakes": s.mistakes,
+        "hint_used": s.hint_used,
         "rating": u2["rating"],
         "delta": u2["rating"] - u["rating"],
         "streak": u2["streak"],
@@ -226,7 +233,7 @@ async def move(uid: int, uci: str) -> dict:
     out = {"result": "solved" if solved else "correct", "my_move": my_uci, "my_san": my_san,
            "mid_fen": s.mid_fen, "reply_san": reply_san, **P.board_state(s)}
     if solved:
-        out["finish"] = await _finish(uid, s, solved_clean=(s.mistakes == 0 and not s.hint_used))
+        out["finish"] = await _finish(uid, s, solved=True)
     return out
 
 
@@ -247,7 +254,7 @@ async def give_up(uid: int) -> dict:
         raise ApiError("no_session", "Нет активной задачи")
     solution = P.solution_text(s)
     first = s.solution[s.idx][:4]
-    return {"solution": solution, "first_move": first, "finish": await _finish(uid, s, solved_clean=False)}
+    return {"solution": solution, "first_move": first, "finish": await _finish(uid, s, solved=False)}
 
 
 async def top() -> list[dict]:
