@@ -62,10 +62,11 @@ class DB:
         await self.conn.execute("PRAGMA journal_mode=WAL")  # параллельный импорт задач не блокирует игроков
         await self.conn.execute("PRAGMA busy_timeout=10000")
         await self.conn.executescript(SCHEMA)
-        try:  # миграция для старых баз
-            await self.conn.execute("ALTER TABLE users ADD COLUMN sub_charge_id TEXT")
-        except aiosqlite.OperationalError:
-            pass
+        for col in ("sub_charge_id TEXT", "source TEXT"):  # миграции для старых баз
+            try:
+                await self.conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+            except aiosqlite.OperationalError:
+                pass
         await self.conn.commit()
 
     async def close(self):
@@ -95,14 +96,30 @@ class DB:
     async def get_user(self, uid):
         return await self.one("SELECT * FROM users WHERE id=?", (uid,))
 
-    async def create_user(self, uid, name, referrer_id=None, rating=800):
+    async def create_user(self, uid, name, referrer_id=None, rating=800, source=None):
         if referrer_id == uid:
             referrer_id = None
         await self.exec(
-            "INSERT OR IGNORE INTO users(id, name, created_at, referrer_id, rating) VALUES(?,?,?,?,?)",
-            (uid, name, int(time.time()), referrer_id, rating),
+            "INSERT OR IGNORE INTO users(id, name, created_at, referrer_id, rating, source) VALUES(?,?,?,?,?,?)",
+            (uid, name, int(time.time()), referrer_id, rating, source),
         )
         return await self.get_user(uid)
+
+    async def sources_report(self, days: int | None = None):
+        """Воронка по источникам: пришли → решали → вернулись на 2-й день → заплатили → звёзды."""
+        where, args = "", ()
+        if days:
+            where, args = "WHERE u.created_at > ?", (int(time.time()) - days * 86400,)
+        return await self.all(f"""
+            SELECT COALESCE(u.source, 'organic') AS src,
+                   COUNT(*) AS users,
+                   SUM(EXISTS(SELECT 1 FROM attempts a WHERE a.user_id = u.id)) AS played,
+                   SUM((SELECT COUNT(DISTINCT day) FROM attempts a WHERE a.user_id = u.id) >= 2) AS returned,
+                   SUM(EXISTS(SELECT 1 FROM payments p WHERE p.user_id = u.id AND p.refunded = 0)) AS payers,
+                   COALESCE(SUM((SELECT SUM(stars) FROM payments p WHERE p.user_id = u.id AND p.refunded = 0)), 0) AS stars
+            FROM users u {where}
+            GROUP BY src ORDER BY users DESC
+        """, args)
 
     async def set_field(self, uid, field, value):
         assert field in {"rating", "daily_sub", "ref_rewarded", "name", "sub_charge_id"}

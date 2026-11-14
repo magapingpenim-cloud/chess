@@ -156,6 +156,42 @@ async def cmd_stats(message: Message):
     )
 
 
+@router.message(Command("link"), admin_only)
+async def cmd_link(message: Message, command: CommandObject):
+    name = (command.args or "").strip().lower()
+    if not core.SOURCE_RE.match(name):
+        return await message.answer(
+            "Создать ссылку для рекламы: <code>/link adsgram</code>\n"
+            "Имя — латиница, цифры и _, до 32 символов. Потом смотрите /sources."
+        )
+    u = core.bot_username
+    await message.answer(
+        f"🔗 Ссылки для источника <b>{name}</b>:\n\n"
+        f"Сразу в приложение:\n<code>https://t.me/{u}?startapp=src_{name}</code>\n\n"
+        f"Через бота (кнопка «Старт»):\n<code>https://t.me/{u}?start=src_{name}</code>\n\n"
+        "Первая ссылка работает, если в @BotFather настроен Mini App (Configure Mini App)."
+    )
+
+
+@router.message(Command("sources"), admin_only)
+async def cmd_sources(message: Message, command: CommandObject):
+    days = int(command.args) if command.args and command.args.strip().isdigit() else None
+    rows = await db.sources_report(days)
+    if not rows:
+        return await message.answer("Пользователей пока нет.")
+    pct = lambda a, b: f"{round(100 * a / b)}%" if b else "—"  # noqa: E731
+    lines = [f"📈 <b>Источники</b> {'за ' + str(days) + ' дн.' if days else 'за всё время'}\n"
+             "пришли → решали → вернулись → заплатили · ⭐"]
+    for r in rows:
+        lines.append(
+            f"\n<b>{r['src']}</b>: {r['users']} → {r['played']} ({pct(r['played'], r['users'])}) → "
+            f"{r['returned']} ({pct(r['returned'], r['users'])}) → {r['payers']} ({pct(r['payers'], r['users'])}) · "
+            f"{r['stars']}⭐"
+        )
+    lines.append("\n\n«вернулись» — решали задачи минимум в 2 разных дня. /sources 7 — только пришедшие за 7 дней.")
+    await message.answer("".join(lines))
+
+
 @router.message(Command("refund"), admin_only)
 async def cmd_refund(message: Message, command: CommandObject, bot: Bot):
     parts = (command.args or "").split()

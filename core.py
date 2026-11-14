@@ -1,5 +1,6 @@
 """Бизнес-логика ChessUp — общая для бота и Mini App API."""
 import os
+import re
 import time
 
 from aiogram import Bot
@@ -51,16 +52,27 @@ def themes_ru(themes: str) -> list[str]:
     return [THEMES[t] for t in (themes or "").split() if t in THEMES]
 
 
+SOURCE_RE = re.compile(r"^[a-z0-9_]{1,32}$")
+
+
+def parse_start_param(start_param: str | None) -> tuple[int | None, str | None]:
+    """ref_123 → (123, 'ref'); src_adsgram → (None, 'adsgram'); иначе (None, None)."""
+    p = (start_param or "").strip().lower()
+    if p.startswith("ref_") and p[4:].isdigit():
+        return int(p[4:]), "ref"
+    if p.startswith("src_") and SOURCE_RE.match(p[4:]):
+        return None, p[4:]
+    return None, None
+
+
 async def ensure_user(uid: int, name: str | None, start_param: str | None = None):
     u = await db.get_user(uid)
     if u:
-        return u
-    ref = None
-    if start_param and start_param.startswith("ref_") and start_param[4:].isdigit():
-        ref = int(start_param[4:])
-        if not await db.get_user(ref):
-            ref = None
-    u = await db.create_user(uid, name, ref)
+        return u  # источник записывается только при первом входе
+    ref, source = parse_start_param(start_param)
+    if ref is not None and (ref == uid or not await db.get_user(ref)):
+        ref = None
+    u = await db.create_user(uid, name, ref, source=source)
     await db.exec("UPDATE users SET rating=0 WHERE id=?", (uid,))  # 0 = уровень ещё не выбран
     return await db.get_user(uid)
 
