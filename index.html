@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>ChessUp</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <style>
   :root {
     --bg: var(--tg-theme-bg-color, #ffffff);
@@ -144,6 +145,38 @@
     transition: all .25s; z-index: 20; pointer-events: none; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .center { text-align: center; }
+
+  /* партии */
+  .pbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card);
+    border-radius: 12px; padding: 8px 12px; margin: 0 auto 8px; width: min(100%, 480px); }
+  .pinfo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .pinfo b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
+  .pinfo .muted { font-size: 12px; }
+  .pava { font-size: 22px; width: 38px; height: 38px; border-radius: 50%; background: var(--sec); flex: none;
+    display: flex; align-items: center; justify-content: center; }
+  .clock { font: 700 20px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--sec); padding: 8px 10px;
+    border-radius: 10px; min-width: 76px; text-align: center; }
+  .clock.active { background: var(--accent); color: var(--accent-text); }
+  .clock.low { background: var(--bad); color: #fff; }
+  #game-slot .board-wrap { margin-bottom: 8px; }
+  .coach { background: linear-gradient(135deg, #fff4d6, #ffe2a8); color: #4a3200; border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 12px; animation: fade .2s; }
+  .coach .row { margin-top: 10px; }
+  .coach .btn { padding: 10px; font-size: 14px; }
+  .coach .btn.ghost { background: rgba(255,255,255,.7); color: #4a3200; }
+  .tc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 8px; }
+  .tc { padding: 14px 0; border: 0; border-radius: 12px; background: var(--sec); color: var(--text);
+    font: 700 16px/1 inherit; cursor: pointer; }
+  .tc small { display: block; font-weight: 500; font-size: 11px; color: var(--hint); margin-top: 4px; }
+  .coach-item { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: var(--sec);
+    color: var(--text); border-radius: 12px; padding: 12px; margin-top: 8px; font: inherit; text-align: left; cursor: pointer; }
+  .coach-item .ico { font-size: 28px; width: 36px; text-align: center; }
+  .seg { display: flex; gap: 6px; margin-top: 10px; }
+  .seg button { flex: 1; padding: 9px; border: 0; border-radius: 10px; background: var(--sec); color: var(--text);
+    font: inherit; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .spin { font-size: 60px; display: inline-block; animation: hop 1.4s ease-in-out infinite; }
+  @keyframes hop { 50% { transform: translateY(-10px) rotate(-12deg); } }
   .loader { text-align: center; padding: 80px 0; color: var(--hint); font-size: 40px; animation: pulse 1s infinite; }
 </style>
 </head>
@@ -184,6 +217,8 @@
     <div id="h-status" class="pill"></div>
   </div>
   <button class="btn" id="b-play">🧩 Решать задачи</button>
+  <div style="height:10px"></div>
+  <button class="btn ghost" id="b-game">⚔️ Играть партию <span class="muted" style="font-weight:500">онлайн или с тренером</span></button>
   <div class="grid">
     <button class="tile" id="t-daily"><span class="badge" id="daily-badge"></span><div class="ico">📅</div><b>Задача дня</b><small>одна для всех</small></button>
     <button class="tile" id="t-themes"><span class="badge" id="themes-badge"></span><div class="ico">🎯</div><b>Темы</b><small>вилки, связки, маты</small></button>
@@ -207,10 +242,59 @@
     <span class="chip">⚡ <span id="pz-rating"></span></span>
   </div>
   <div class="status" id="pz-status"></div>
-  <div class="board-wrap"><div id="board"></div></div>
+  <div id="pz-slot"><div class="board-wrap" id="board-wrap"><div id="board"></div></div></div>
   <div class="row">
     <button class="btn ghost" id="b-hint">💡 Подсказка</button>
     <button class="btn ghost" id="b-giveup">📖 Решение</button>
+  </div>
+</div>
+
+<!-- Выбор партии -->
+<div id="s-play" class="screen">
+  <h2>⚔️ Играть партию</h2>
+  <div class="card">
+    <b>🌐 Онлайн с живыми игроками</b>
+    <div class="muted" style="font-size:13px">Рейтинг партий: <b id="pl-rating" style="display:inline">1200</b> · <span id="pl-online">…</span></div>
+    <div class="tc-grid">
+      <button class="tc" data-tc="3+0">3<small>минуты</small></button>
+      <button class="tc" data-tc="3+2">3+2<small>блиц</small></button>
+      <button class="tc" data-tc="5+0">5<small>минут</small></button>
+      <button class="tc" data-tc="10+0">10<small>минут</small></button>
+    </div>
+    <div class="muted" style="font-size:12px">Если за 20 секунд соперник не найдётся — сыграете с тренером-ботом.</div>
+  </div>
+  <div class="card">
+    <b>🤖 С тренером</b>
+    <div class="muted" style="font-size:13px">Тренер подсказывает ход, ловит зевки и разрешает переходить</div>
+    <div class="seg" id="color-seg">
+      <button data-color="w">♔ Белыми</button><button data-color="random" class="on">🎲 Случайно</button><button data-color="b">♚ Чёрными</button>
+    </div>
+    <div id="coaches"></div>
+  </div>
+</div>
+
+<!-- Поиск соперника -->
+<div id="s-search" class="screen">
+  <div class="card center" style="margin-top:30px;padding:30px 16px">
+    <div class="spin">♞</div>
+    <h2 style="margin:12px 0 4px">Ищем соперника…</h2>
+    <div class="muted" id="search-info">5+0 · 0:00</div>
+    <p class="muted" style="font-size:13px">Если никого не найдём за 20 секунд — сыграете с тренером-ботом</p>
+    <button class="btn ghost" id="b-search-cancel">Отменить</button>
+  </div>
+</div>
+
+<!-- Партия -->
+<div id="s-game" class="screen">
+  <div class="pbar"><div class="pinfo"><span class="pava" id="opp-ava">🤖</span><div><b id="opp-name"></b><div class="muted" id="opp-sub"></div></div></div><div class="clock" id="opp-clock"></div></div>
+  <div id="game-slot"></div>
+  <div class="pbar"><div class="pinfo"><span class="pava" id="me-ava">🙂</span><div><b id="me-name"></b><div class="muted" id="me-sub"></div></div></div><div class="clock" id="me-clock"></div></div>
+  <div class="status" id="g-status"></div>
+  <div class="coach" id="coach-box" style="display:none"></div>
+  <div class="row">
+    <button class="btn ghost" id="b-g-hint">💡 Тренер</button>
+    <button class="btn ghost" id="b-g-undo">↩️ Назад</button>
+    <button class="btn ghost" id="b-g-resign">✋ Сдаться</button>
   </div>
 </div>
 
@@ -251,6 +335,7 @@
 <script>
 const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
 const INIT = tg ? tg.initData : "";
+const DEV_USER = new URLSearchParams(location.search).get("dev") || "";  // работает только при DEV_MODE на сервере
 if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("secondary_bg_color"); tg.setBackgroundColor("secondary_bg_color"); } catch (e) {} }
 
 const $ = (s) => document.querySelector(s);
@@ -275,7 +360,7 @@ function toast(text) {
 async function api(path, body) {
   const r = await fetch(path, {
     method: body ? "POST" : "GET",
-    headers: { "Content-Type": "application/json", "X-Init-Data": INIT },
+    headers: { "Content-Type": "application/json", "X-Init-Data": INIT, "X-Dev-User": DEV_USER },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
@@ -290,7 +375,11 @@ function show(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("active", s.id === id));
   if (tg) (id === "s-home" || id === "s-level") ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
-  if (id === "s-puzzle") sizeBoard();
+  if (id === "s-puzzle" || id === "s-game") sizeBoard();
+}
+function mountBoard(slot) {
+  const wrap = $("#board-wrap"), target = $(slot);
+  if (wrap.parentElement !== target) target.appendChild(wrap);
 }
 function closeSheet() { $("#overlay").classList.remove("show"); }
 $("#overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeSheet(); });
@@ -336,7 +425,7 @@ function renderHome() {
   $("#invite-text").textContent = `+${ME.ref_bonus_days} дней VIP, когда друг оформит VIP`;
 }
 async function goHome() {
-  closeSheet(); P = null;
+  closeSheet(); P = null; G = null; OG = null; busy = false; stopClock(); hideCoach();
   try { await loadMe(); } catch (e) {}
   renderHome(); show("s-home");
 }
@@ -395,7 +484,7 @@ function turnText() { return P.turn === "w" ? "белых" : "чёрных"; }
 function onSquare(sq, pos) {
   if (busy || !P || P.done) return;
   const pc = pos[sq];
-  const mine = pc && ((pc === pc.toUpperCase()) === (P.turn === "w"));
+  const mine = isMine(pc);
   if (sel && P.legal.includes(sel + sq)) { const from = sel; sel = null; sendMove(from + sq); return; }
   if (mine) { sel = sel === sq ? null : sq; haptic(); } else sel = null;
   draw();
@@ -403,7 +492,9 @@ function onSquare(sq, pos) {
 
 /* ---------- перетаскивание (палец или мышь); короткое касание = выбор/ход как раньше ---------- */
 let drag = null;
-const isMine = (pc) => pc && ((pc === pc.toUpperCase()) === (P.turn === "w"));
+// своя фигура: цвет того, чей ход; в партиях — только когда ходите вы
+const isMine = (pc) => !!pc && ((pc === pc.toUpperCase()) === (P.turn === "w"))
+  && (!P.kind || P.turn === P.orientation);
 const sqAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest("#board .sq"); };
 
 function markTargets(from) {
@@ -464,7 +555,8 @@ boardEl.addEventListener("pointerup", (e) => {
 boardEl.addEventListener("pointercancel", () => { endDrag(); sel = null; if (P) draw(); });
 
 function openPuzzle(p) {
-  P = p; sel = null; hintSq = null;
+  P = p; sel = null; hintSq = null; G = null; OG = null;
+  mountBoard("#pz-slot");
   $("#pz-title").textContent = (p.daily ? "📅 " : "🧩 ") + p.title;
   $("#pz-rating").textContent = p.rating;
   setStatus(`Ход ${turnText()} — найдите лучший ход`);
@@ -487,7 +579,18 @@ async function playOrResume() {
   startPuzzle("normal");
 }
 
-async function sendMove(uci) {
+function sendMove(uci) {
+  if (P.kind === "bot") return botPlayerMove(uci);
+  if (P.kind === "online") return onlineMove(uci);
+  return sendPuzzleMove(uci);
+}
+function renderOptimistic(uci) {
+  const pos = parseFen(P.fen), from = uci.slice(0, 2), to = uci.slice(2, 4), pc = pos[from];
+  delete pos[from];
+  pos[to] = pc && pc.toLowerCase() === "p" && (to[1] === "8" || to[1] === "1") ? (pc === "P" ? "Q" : "q") : pc;
+  renderBoard(pos, uci, null);
+}
+async function sendPuzzleMove(uci) {
   busy = true; hintSq = null;
   // сразу показываем ход (фигура «встаёт» на клетку), сервер затем подтвердит или откатит
   const pos = parseFen(P.fen), from = uci.slice(0, 2), to = uci.slice(2, 4), pc = pos[from];
@@ -632,7 +735,355 @@ async function cancelSub() {
   else if (confirm("Отменить автопродление?")) go();
 }
 
+/* ======================= ПАРТИИ ======================= */
+let G = null;    // партия с ботом: {chess, coach, color, colorChoice, hints, before, beforeP, over}
+let OG = null;   // онлайн: {gid, v, s (состояние с сервера), recv, shown} или {searching}
+let clockTimer = null, botColor = "random";
+const SEARCH_MS = 20000;
+const SF_URL = "https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js";
+const COACHES = [
+  { id: "pawn", name: "Пешкин", lvl: "новичок", elo: 600, skill: 0, depth: 1, rnd: 0.35, ico: "♟" },
+  { id: "knight", name: "Конев", lvl: "любитель", elo: 1000, skill: 3, depth: 3, rnd: 0.12, ico: "♞" },
+  { id: "bishop", name: "Слонова", lvl: "клубный игрок", elo: 1400, skill: 8, depth: 6, rnd: 0, ico: "♝" },
+  { id: "rook", name: "Ладьин", lvl: "кандидат в мастера", elo: 1800, skill: 14, depth: 10, rnd: 0, ico: "♜" },
+  { id: "queen", name: "Ферзева", lvl: "мастер", elo: 2300, skill: 20, depth: 13, rnd: 0, ico: "♛" },
+];
+const coachForRating = (r) => COACHES.reduce((a, c) => Math.abs(c.elo - r) < Math.abs(a.elo - r) ? c : a);
+function setGStatus(text, cls = "") { const s = $("#g-status"); s.textContent = text; s.className = "status " + cls; }
+
+/* --- движок Stockfish (работает в телефоне игрока, в отдельном потоке) --- */
+let sf = null, sfChain = Promise.resolve();
+function sfWorker() {
+  if (!sf) {
+    const blob = new Blob([`importScripts("${SF_URL}");`], { type: "application/javascript" });
+    sf = new Worker(URL.createObjectURL(blob));
+    sf.postMessage("uci");
+  }
+  return sf;
+}
+// лучший ход и оценка (в сантипешках, с точки зрения того, чей ход)
+function sfRun(fen, { skill = 20, depth = 8 } = {}) {
+  const job = () => new Promise((resolve) => {
+    const w = sfWorker(); let score = null;
+    const timer = setTimeout(() => { w.removeEventListener("message", onMsg); w.postMessage("stop"); resolve({ best: null, score }); }, 15000);
+    function onMsg(e) {
+      const line = String(e.data || "");
+      const m = line.startsWith("info") && line.match(/score (cp|mate) (-?\d+)/);
+      if (m) score = m[1] === "cp" ? +m[2] : (+m[2] > 0 ? 100000 - +m[2] : -100000 - +m[2]);
+      if (line.startsWith("bestmove")) {
+        clearTimeout(timer); w.removeEventListener("message", onMsg);
+        const best = line.split(" ")[1];
+        resolve({ best: best && best !== "(none)" ? best : null, score });
+      }
+    }
+    w.addEventListener("message", onMsg);
+    w.postMessage(`setoption name Skill Level value ${skill}`);
+    w.postMessage(`position fen ${fen}`);
+    w.postMessage(`go depth ${depth}`);
+  });
+  sfChain = sfChain.then(job, job);
+  return sfChain;
+}
+const sanOf = (fen, uci) => {
+  try { const m = new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); return m ? m.san : uci; }
+  catch (e) { return uci; }
+};
+
+/* --- тренер: подсказки в окне над кнопками --- */
+let coachResolve = null;
+function hideCoach() { const c = $("#coach-box"); c.style.display = "none"; c.innerHTML = ""; if (coachResolve) { coachResolve(false); coachResolve = null; } }
+function coachSay(html, ms = 2600) {
+  const c = $("#coach-box"); c.innerHTML = html; c.style.display = "block";
+  clearTimeout(c._h); c._h = setTimeout(() => { if (!coachResolve) hideCoach(); }, ms);
+}
+function coachAsk(html, yes, no) {
+  return new Promise((resolve) => {
+    const c = $("#coach-box"); clearTimeout(c._h);
+    c.innerHTML = `${html}<div class="row"><button class="btn" id="c-yes">${yes}</button><button class="btn ghost" id="c-no">${no}</button></div>`;
+    c.style.display = "block"; coachResolve = resolve;
+    $("#c-yes").onclick = () => { coachResolve = null; c.style.display = "none"; resolve(true); };
+    $("#c-no").onclick = () => { coachResolve = null; c.style.display = "none"; resolve(false); };
+  });
+}
+
+/* --- экран выбора партии --- */
+function openPlay() {
+  closeSheet(); stopClock(); hideCoach();
+  $("#pl-rating").textContent = ME.online_rating;
+  const box = $("#coaches"); box.innerHTML = "";
+  COACHES.forEach((c) => {
+    const b = document.createElement("button"); b.className = "coach-item";
+    b.innerHTML = `<span class="ico">${c.ico}</span><div><b>Тренер ${c.name}</b><div class="muted" style="font-size:13px">${c.lvl} · ≈${c.elo}</div></div>`;
+    b.onclick = () => startBot(c.id, botColor);
+    box.appendChild(b);
+  });
+  show("s-play");
+  api("/api/online/count").then((r) => {
+    $("#pl-online").textContent = r.playing || r.searching ? `сейчас играют ${r.playing}, ищут ${r.searching}` : "пока никто не ищет";
+  }).catch(() => { $("#pl-online").textContent = ""; });
+}
+document.querySelectorAll("#color-seg button").forEach((b) => b.onclick = () => {
+  botColor = b.dataset.color; haptic();
+  document.querySelectorAll("#color-seg button").forEach((x) => x.classList.toggle("on", x === b));
+});
+document.querySelectorAll(".tc").forEach((b) => b.onclick = () => startSearch(b.dataset.tc));
+
+function setupBars(opp, me, clocks) {
+  $("#opp-ava").textContent = opp.ava; $("#opp-name").textContent = opp.name; $("#opp-sub").textContent = opp.sub;
+  $("#me-ava").textContent = "🙂"; $("#me-name").textContent = me.name; $("#me-sub").textContent = me.sub;
+  $("#opp-clock").style.display = $("#me-clock").style.display = clocks ? "block" : "none";
+  $("#b-g-hint").style.display = $("#b-g-undo").style.display = clocks ? "none" : "flex";
+}
+function showGameResult(o) {
+  const icons = { win: "🏆", lose: "😔", draw: "🤝", abort: "⏹" };
+  const d = o.delta == null ? "" :
+    `<div class="delta ${o.delta >= 0 ? "up" : "down"}">${o.delta >= 0 ? "+" : ""}${o.delta}</div><div class="muted">рейтинг партий ${o.rating + o.delta}</div>`;
+  $("#sheet").innerHTML = `
+    <div class="big">${icons[o.res]}</div>
+    <h2 style="margin:4px 0">${o.title}</h2>
+    <div class="muted">${o.reason || ""}</div>${d}
+    <div style="height:14px"></div>
+    ${o.harder ? `<button class="btn gold" id="r-harder">💪 Тренер посильнее</button><div style="height:8px"></div>` : ""}
+    <button class="btn" id="r-again">🔄 Ещё партия</button>
+    <div style="height:8px"></div>
+    <button class="btn ghost" id="r-home">На главную</button>`;
+  $("#overlay").classList.add("show");
+  $("#r-again").onclick = () => { closeSheet(); o.again(); };
+  if (o.harder) $("#r-harder").onclick = () => { closeSheet(); o.harder(); };
+  $("#r-home").onclick = goHome;
+  haptic(o.res === "win" ? "ok" : o.res === "lose" ? "err" : "tap");
+}
+
+/* --- партия с тренером-ботом (правила — chess.js, ходы бота и анализ — Stockfish) --- */
+function kingSquare(ch, color) {
+  const b = ch.board();
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+    const p = b[r][f]; if (p && p.type === "k" && p.color === color) return FILES[f] + (8 - r);
+  }
+  return null;
+}
+function botSync() {
+  const ch = G.chess, over = G.over || ch.game_over(), myTurn = ch.turn() === G.color && !over;
+  Object.assign(P, {
+    fen: ch.fen(), turn: ch.turn(), orientation: G.color, done: over,
+    legal: myTurn ? ch.moves({ verbose: true }).map((m) => m.from + m.to) : [],
+    check: ch.in_check() ? kingSquare(ch, ch.turn()) : null,
+  });
+  draw();
+}
+function startBot(coachId, color, note) {
+  if (!window.Chess) return toast("Не загрузился шахматный модуль — проверьте интернет");
+  const coach = COACHES.find((c) => c.id === coachId) || COACHES[1];
+  const col = color === "w" || color === "b" ? color : (Math.random() < 0.5 ? "w" : "b");
+  closeSheet(); stopClock(); hideCoach(); OG = null; busy = false; sel = null; hintSq = null;
+  G = { chess: new Chess(), coach, color: col, colorChoice: color, hints: 0, before: null, beforeP: null, over: false };
+  P = { kind: "bot", last_move: null };
+  setupBars({ ava: coach.ico, name: `Тренер ${coach.name}`, sub: `🤖 бот · ${coach.lvl} · ≈${coach.elo}` },
+            { name: ME.name || "Вы", sub: col === "w" ? "белые" : "чёрные" }, false);
+  mountBoard("#game-slot"); show("s-game"); botSync();
+  setGStatus(note || (col === "w" ? "Вы играете белыми. Ваш ход" : `Вы играете чёрными. ${coach.name} начинает`));
+  sfWorker();
+  if (col !== "w") botTurn(); else analyzeForCoach();
+}
+function analyzeForCoach() {
+  const g = G; if (!g || g.over) return;
+  g.before = null;
+  g.beforeP = sfRun(g.chess.fen(), { skill: 20, depth: 8 }).then((r) => { if (G === g) g.before = r; return r; });
+}
+async function botTurn() {
+  const g = G; if (!g || g.over) return;
+  busy = true; setGStatus(`🤖 ${g.coach.name} думает…`);
+  const t0 = Date.now(), legal = g.chess.moves({ verbose: true });
+  let mv = g.coach.rnd && Math.random() < g.coach.rnd ? legal[Math.floor(Math.random() * legal.length)] : null;
+  if (!mv) {
+    const r = await sfRun(g.chess.fen(), { skill: g.coach.skill, depth: g.coach.depth });
+    if (G !== g) return;
+    mv = r.best ? { from: r.best.slice(0, 2), to: r.best.slice(2, 4), promotion: r.best[4] || "q" } : legal[0];
+  }
+  await sleep(Math.max(0, 450 - (Date.now() - t0)));
+  if (G !== g) return;
+  const done = g.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+  P.last_move = done.from + done.to; busy = false; hintSq = null; botSync();
+  if (g.chess.game_over()) return finishBot();
+  setGStatus(`🤖 ${g.coach.name}: ${done.san}. Ваш ход`);
+  analyzeForCoach();
+}
+async function botPlayerMove(uci) {
+  const g = G; if (!g || g.over) return;
+  busy = true; hideCoach(); hintSq = null;
+  const fenBefore = g.chess.fen();
+  const mv = g.chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: "q" });
+  if (!mv) { busy = false; return botSync(); }
+  P.last_move = mv.from + mv.to; botSync();
+  if (g.chess.game_over()) { busy = false; return finishBot(); }
+  // тренер проверяет ход: сравниваем оценку до и после
+  setGStatus("🧐 Тренер смотрит ваш ход…");
+  const before = g.beforeP ? await g.beforeP : null;
+  if (G !== g) return;
+  const after = await sfRun(g.chess.fen(), { skill: 20, depth: 8 });
+  if (G !== g) return;
+  if (before && before.best && before.score !== null && after.score !== null) {
+    const drop = before.score + after.score;   // after — с точки зрения соперника
+    const limit = g.chess.history().length <= 8 ? 220 : 150;  // в дебюте оценка шумная — тренер строже к себе
+    if (drop >= limit && before.best.slice(0, 4) !== uci) {
+      busy = false; setGStatus("Тренер заметил ошибку 👇");
+      const back = await coachAsk(
+        `😬 <b>Тренер ${g.coach.name}:</b> «${mv.san} — ${drop >= 400 ? "серьёзный зевок" : "неточность"}. Лучше было <b>${sanOf(fenBefore, before.best)}</b>».`,
+        "↩️ Переходить", "Играть дальше");
+      if (G !== g) return;
+      if (back) {
+        g.chess.undo(); P.last_move = null; hintSq = before.best.slice(0, 2); botSync();
+        setGStatus("Подумайте ещё раз 🙂 Тренер подсветил фигуру");
+        return;
+      }
+      busy = true;
+    } else if (drop <= 15 && Math.random() < 0.3) {
+      coachSay(["👍 Хороший ход!", "💪 Сильно!", "✅ Точно, как у мастера!"][Math.floor(Math.random() * 3)]);
+    }
+  }
+  busy = false;
+  await botTurn();
+}
+async function gameHint() {
+  const g = G; if (!g || g.over || busy || g.chess.turn() !== g.color) return;
+  if (!ME.vip && g.hints >= 2) return openVip("💡 Безлимитные подсказки тренера — в VIP (бесплатно 2 за партию)");
+  setGStatus("💡 Тренер думает…");
+  const r = await (g.beforeP || sfRun(g.chess.fen(), { skill: 20, depth: 8 }));
+  if (G !== g || !r.best) return;
+  g.hints++; hintSq = r.best.slice(0, 2); draw(); haptic();
+  setGStatus(`💡 Тренер советует: ${sanOf(g.chess.fen(), r.best)}${ME.vip ? "" : ` (осталось ${2 - g.hints})`}`);
+}
+function gameUndo() {
+  const g = G; if (!g || g.over || busy || g.chess.turn() !== g.color || g.chess.history().length < 2) return;
+  g.chess.undo(); g.chess.undo(); P.last_move = null; hintSq = null; hideCoach(); botSync();
+  setGStatus("Ход отменён. Ваш ход"); analyzeForCoach();
+}
+function finishBot(resigned = false) {
+  const g = G; if (!g) return;
+  g.over = true; busy = false; botSync();
+  const ch = g.chess;
+  const res = resigned ? "lose" : ch.in_checkmate() ? (ch.turn() === g.color ? "lose" : "win") : "draw";
+  const reason = resigned ? "Сдача" : ch.in_checkmate() ? "Мат" : ch.in_stalemate() ? "Пат"
+    : ch.in_threefold_repetition() ? "Повторение позиции" : ch.insufficient_material() ? "Недостаточно материала" : "Ничья";
+  const idx = COACHES.indexOf(g.coach), next = COACHES[idx + 1];
+  setGStatus(reason);
+  showGameResult({
+    res, reason, title: res === "win" ? `Победа! Вы обыграли тренера ${g.coach.name}` : res === "lose" ? "Поражение" : "Ничья",
+    again: () => startBot(g.coach.id, g.colorChoice),
+    harder: res === "win" && next ? () => startBot(next.id, g.colorChoice) : null,
+  });
+}
+
+/* --- онлайн: поиск соперника, если никого нет — тренер-бот --- */
+async function startSearch(tc) {
+  haptic(); G = null;
+  const token = {}; OG = { searching: token, tc };
+  show("s-search");
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("#search-info").textContent = `${tc} · 0:${String(s).padStart(2, "0")}`;
+  }, 500);
+  try {
+    while (OG && OG.searching === token) {
+      const r = await api("/api/online/find", { tc });
+      if (!OG || OG.searching !== token) break;
+      if (r.status === "matched") return openOnline(r.game);
+      if (Date.now() - t0 > SEARCH_MS) {
+        await api("/api/online/cancel", {}).catch(() => {});
+        OG = null;
+        const c = coachForRating(ME.online_rating);
+        toast("Сейчас никого нет онлайн — играем с тренером-ботом");
+        return startBot(c.id, "random", `😔 Соперник не найден. С вами играет тренер-бот ${c.name} (≈${c.elo})`);
+      }
+      await sleep(2000);
+    }
+  } catch (e) { toast(e.message); if (screen === "s-search") openPlay(); }
+  finally { clearInterval(tick); }
+}
+async function cancelSearch() {
+  OG = null; await api("/api/online/cancel", {}).catch(() => {}); openPlay();
+}
+function openOnline(s) {
+  G = null; busy = false; sel = null; hintSq = null; hideCoach();
+  OG = { gid: s.gid, v: -1, s: null, recv: Date.now(), shown: false };
+  P = { kind: "online", last_move: null };
+  setupBars({ ava: "👤", name: s.opponent.name, sub: `рейтинг ${s.opponent.rating}` },
+            { name: s.me.name, sub: `рейтинг ${s.me.rating}` }, true);
+  mountBoard("#game-slot"); show("s-game");
+  applyOnline(s);
+  setGStatus(s.color === "w" ? `⚔️ Соперник найден! Вы белые — ваш ход` : `⚔️ Соперник найден! Вы чёрные — ход соперника`, "good");
+  haptic("ok");
+  clockTimer = setInterval(renderClocks, 250);
+  pollOnline(s.gid);
+}
+function stopClock() { clearInterval(clockTimer); clockTimer = null; }
+function fmtClock(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+function renderClocks() {
+  if (!OG || !OG.s) return;
+  const s = OG.s, opp = s.color === "w" ? "b" : "w";
+  const live = (c) => s.clocks[c] - (s.status === "playing" && s.clock_running && s.turn === c ? Date.now() - OG.recv : 0);
+  [[s.color, "#me-clock"], [opp, "#opp-clock"]].forEach(([c, sel_]) => {
+    const el = $(sel_), ms = live(c);
+    el.textContent = fmtClock(ms);
+    el.classList.toggle("active", s.status === "playing" && s.turn === c);
+    el.classList.toggle("low", s.status === "playing" && ms < 20000);
+  });
+}
+function applyOnline(s) {
+  if (!OG || OG.gid !== s.gid || s.version < OG.v) return;
+  const prev = OG.s;
+  OG.s = s; OG.v = s.version; OG.recv = Date.now();
+  Object.assign(P, { fen: s.fen, legal: s.legal, last_move: s.last_move, check: s.check, turn: s.turn,
+                     orientation: s.color, done: s.status !== "playing" });
+  if (!busy) draw();
+  renderClocks();
+  if (prev && prev.version !== s.version && s.status === "playing" && s.turn === s.color && s.moves.length) {
+    setGStatus(`Соперник: ${s.moves[s.moves.length - 1]}. Ваш ход`); haptic();
+  }
+  if (s.status === "over" && !OG.shown) {
+    OG.shown = true; stopClock(); renderClocks();
+    const res = s.result === "aborted" ? "abort" : s.result === "1/2-1/2" ? "draw"
+      : ((s.result === "1-0") === (s.color === "w")) ? "win" : "lose";
+    setGStatus(s.reason || "Партия окончена");
+    showGameResult({
+      res, reason: s.reason, delta: s.rating_delta, rating: s.me.rating,
+      title: { win: "Победа!", lose: "Поражение", draw: "Ничья", abort: "Партия отменена" }[res],
+      again: () => startSearch(s.tc),
+    });
+  }
+}
+async function pollOnline(gid) {
+  while (OG && OG.gid === gid && OG.s && OG.s.status === "playing") {
+    try { applyOnline(await api(`/api/online/state?gid=${gid}&v=${OG.v}`)); }
+    catch (e) { await sleep(1500); }
+  }
+}
+async function onlineMove(uci) {
+  if (!OG) return;
+  busy = true; renderOptimistic(uci);
+  try {
+    const s = await api("/api/online/move", { gid: OG.gid, uci });
+    busy = false; applyOnline(s);
+    if (s.status === "playing") setGStatus("Ход соперника…");
+  } catch (e) { busy = false; toast(e.message); draw(); }
+}
+async function resignOnline() {
+  if (!OG || !OG.gid) return;
+  try { applyOnline(await api("/api/online/resign", { gid: OG.gid })); } catch (e) { toast(e.message); }
+}
+function gameResign() {
+  const go = () => { if (OG && OG.gid) resignOnline(); else if (G && !G.over) finishBot(true); };
+  if (tg && tg.showConfirm) tg.showConfirm("Сдаться?", (ok) => ok && go());
+  else if (confirm("Сдаться?")) go();
+}
+
 /* ---------- кнопки ---------- */
+$("#b-game").onclick = () => { haptic(); openPlay(); };
+$("#b-search-cancel").onclick = cancelSearch;
+$("#b-g-hint").onclick = gameHint;
+$("#b-g-undo").onclick = gameUndo;
+$("#b-g-resign").onclick = gameResign;
 $("#b-play").onclick = playOrResume;
 $("#t-daily").onclick = () => { haptic(); ME.daily_done ? toast("✅ Задача дня решена. Завтра будет новая!") : startPuzzle("daily"); };
 $("#t-themes").onclick = () => { haptic(); openThemes(); };
@@ -650,7 +1101,17 @@ $("#c-invite").onclick = () => {
   const url = `https://t.me/share/url?url=${encodeURIComponent(ME.ref_link)}&text=${encodeURIComponent("Решай шахматные задачи в ChessUp ♟ Сможешь обогнать мой рейтинг?")}`;
   tg && tg.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
 };
-if (tg) tg.BackButton.onClick(() => { screen === "s-themes" || screen === "s-top" || screen === "s-vip" || screen === "s-puzzle" ? goHome() : null; });
+if (tg) tg.BackButton.onClick(onBack);
+function onBack() {
+  if (screen === "s-search") return cancelSearch();
+  if (screen === "s-game" && OG && OG.s && OG.s.status === "playing") {
+    const go = async () => { await resignOnline(); goHome(); };
+    return tg && tg.showConfirm ? tg.showConfirm("Выйти из партии? Это засчитается как сдача.", (ok) => ok && go())
+      : confirm("Выйти из партии? Это засчитается как сдача.") && go();
+  }
+  if (screen === "s-game" && G && !G.over) { G = null; return openPlay(); }
+  if (screen !== "s-home" && screen !== "s-level") goHome();
+}
 
 /* ---------- старт ---------- */
 (async function init() {

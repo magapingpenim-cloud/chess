@@ -62,7 +62,8 @@ class DB:
         await self.conn.execute("PRAGMA journal_mode=WAL")  # параллельный импорт задач не блокирует игроков
         await self.conn.execute("PRAGMA busy_timeout=10000")
         await self.conn.executescript(SCHEMA)
-        for col in ("sub_charge_id TEXT", "source TEXT"):  # миграции для старых баз
+        for col in ("sub_charge_id TEXT", "source TEXT",  # миграции для старых баз
+                    "online_rating INTEGER DEFAULT 1200", "online_games INTEGER DEFAULT 0"):
             try:
                 await self.conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
             except aiosqlite.OperationalError:
@@ -156,6 +157,9 @@ class DB:
         until = max(int(time.time()), u["vip_until"] if u else 0) + days * 86400
         await self.exec("UPDATE users SET vip_until=? WHERE id=?", (until, uid))
         return until
+
+    async def update_online(self, uid, new_rating: int):
+        await self.exec("UPDATE users SET online_rating=?, online_games=online_games+1 WHERE id=?", (new_rating, uid))
 
     async def extend_vip_until(self, uid, ts) -> int:
         """Для подписки: VIP до даты окончания оплаченного периода (не укорачивает)."""

@@ -9,6 +9,7 @@ from aiohttp import web
 from aiogram.utils.web_app import safe_parse_webapp_init_data
 
 import core
+import online
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 DEV_MODE = os.getenv("DEV_MODE", "0") == "1"   # локальная отладка в обычном браузере без Telegram
@@ -27,16 +28,18 @@ async def current_user(request: web.Request) -> int:
             raise web.HTTPUnauthorized(text="init data expired")
         await core.ensure_user(data.user.id, data.user.first_name, data.start_param)
         return data.user.id
-    if DEV_MODE:
-        await core.ensure_user(1, "Тестер")
-        return 1
+    if DEV_MODE:  # только локальная отладка: ?dev=2 в адресе — второй тестовый игрок
+        hdr = request.headers.get("X-Dev-User", "")
+        uid = int(hdr) if hdr.isdigit() and 0 < int(hdr) < 100 else 1
+        await core.ensure_user(uid, f"Тестер {uid}")
+        return uid
     raise web.HTTPUnauthorized(text="open the app from Telegram")
 
 
 def api(handler):
     async def wrapper(request: web.Request):
         uid = await current_user(request)
-        body = {}
+        body = dict(request.query)
         if request.method == "POST" and request.can_read_body:
             try:
                 body = await request.json()
@@ -109,6 +112,38 @@ async def h_daily_toggle(uid, body):
     return {"daily_sub": await core.toggle_daily(uid)}
 
 
+# ---------- онлайн-партии ----------
+@api
+async def h_online_find(uid, body):
+    return await online.find(uid, str(body.get("tc", "5+0")))
+
+
+@api
+async def h_online_cancel(uid, body):
+    online.cancel(uid)
+    return {"ok": True}
+
+
+@api
+async def h_online_state(uid, body):
+    return await online.state(uid, body.get("gid"), body.get("v"))
+
+
+@api
+async def h_online_move(uid, body):
+    return await online.move(uid, body.get("gid"), str(body.get("uci", ""))[:5])
+
+
+@api
+async def h_online_resign(uid, body):
+    return await online.resign(uid, body.get("gid"))
+
+
+@api
+async def h_online_count(uid, body):
+    return online.online_count()
+
+
 async def h_index(request):
     resp = web.FileResponse(INDEX_HTML)
     resp.headers["Cache-Control"] = "no-cache"
@@ -125,4 +160,10 @@ def make_app() -> web.Application:
         app.router.add_post(f"/api/{path}", h)
     app.router.add_get("/api/top", h_top)
     app.router.add_get("/api/current", h_current)
+    app.router.add_post("/api/online/find", h_online_find)
+    app.router.add_post("/api/online/cancel", h_online_cancel)
+    app.router.add_get("/api/online/state", h_online_state)
+    app.router.add_post("/api/online/move", h_online_move)
+    app.router.add_post("/api/online/resign", h_online_resign)
+    app.router.add_get("/api/online/count", h_online_count)
     return app

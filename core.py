@@ -106,6 +106,8 @@ async def profile(uid: int) -> dict:
         "ref_link": f"https://t.me/{bot_username}?startapp=ref_{uid}",
         "ref_bonus_days": REF_BONUS_DAYS,
         "has_active": uid in sessions,
+        "online_rating": u["online_rating"],
+        "online_games": u["online_games"],
     }
 
 
